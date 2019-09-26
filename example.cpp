@@ -1,9 +1,16 @@
 #include "lasloader.h"
 
 int main()  {
-    gsl::LASLoader lasloader{"C:\\Users\\andes\\Desktop\\372\\data\\1.las"};
-    
-    for (auto point = lasloader.end() - 2; point != lasloader.end(); ++point)
+    gsl::LASLoader lasloader{"Complete\\Path\\To\\File.las"};
+
+    // Iterate through all points:
+    for (auto point : lasloader)
+    {
+        std::cout << "Point: (" << point.x << ", " << point.y << ", " << point.z << ")" << std::endl;
+    }
+
+    // Iterate in certain range:
+    for (auto point = lasloader.begin() + 10; point != lasloader.end() - 25; ++point)
     {
         std::cout << "Point: (" << point->x << ", " << point->y << ", " << point->z << ")" << std::endl;
     }
