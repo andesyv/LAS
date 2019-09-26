@@ -1,7 +1,7 @@
-#include "lasloader.hpp"
+#include "lasloader.h"
 
 int main()  {
-    auto points = LASLoader::readLAS("372\\data\\testDataLAS.las");
+    auto points = gsl::LASLoader::readLAS("testData.las");
 
     for (auto point : points)
     {

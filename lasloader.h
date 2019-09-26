@@ -16,6 +16,9 @@ struct vec3
 #include <iostream>
 #include <ctime>
 
+namespace gsl
+{
+
 unsigned short getCurrentYear()
 {
     auto t = std::time(nullptr);
@@ -294,5 +297,7 @@ public:
     }
 
 };
+
+}
 
 #endif // LASLOADER_H
