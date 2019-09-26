@@ -28,7 +28,7 @@ unsigned short getCurrentYear()
 class LASLoader
 {
 private:
-    /** Standard type sizes:
+    /** Standard type sizes for 32 bit compiler:
      * char = 1
      * short = 2
      * int = 4
@@ -184,11 +184,110 @@ private:
 private:
     bool usingCreationDay = false;
     bool usingCreationYear = false;
+    bool fileOpened = false;
+    unsigned int currentPointSize{0};
+
+    std::ifstream fstrm{};
 
 public:
     LASLoader()
     {
 
+    }
+
+    LASLoader(const std::string& file)
+    {
+        open(file);
+    }
+
+    bool open(const std::string& file)
+    {
+        if (fstrm.is_open())
+        {
+            fstrm.close();
+        }
+
+        fstrm.open(file.c_str(), std::ifstream::in | std::ifstream::binary);
+        if (fstrm.is_open())
+        {
+            std::cout << "LAS file opened: " << file << std::endl;
+            // Read in first 90 bytes of header
+            fstrm.read((char *) &header, 90);
+
+            // Attempt to read in creationday and creationyear
+            int readerCheckpoint = fstrm.tellg();
+            unsigned short creationDayYear[2]{1000, 3000};
+            fstrm.read((char*) creationDayYear, 2 * sizeof(unsigned short));
+            if (creationDayYear[0] < 367)
+            {
+                if (creationDayYear[0] != 0)
+                {
+                    header.fileCreationDayOfYear = creationDayYear[0];
+                    usingCreationDay = true;
+                }
+                else
+                {
+                    usingCreationDay = false;
+                }
+
+                if (creationDayYear[1] > 2000 && creationDayYear[1] <= getCurrentYear())
+                {
+                    header.fileCreationYear = creationDayYear[1];
+                    usingCreationYear = true;
+                }
+                else
+                {
+                    usingCreationYear = false;
+                }
+            }
+            else
+            {
+                fstrm.seekg(readerCheckpoint, fstrm.beg);
+                usingCreationDay = false;
+                usingCreationYear = false;
+            }
+
+            // Read 37 more byte
+            fstrm.read((char*) &header.headerSize, 37);
+
+            // And now 96 more bytes
+            fstrm.read((char*) &header.xScaleFactor, 96);
+
+            // For newer types:
+            if (header.versionMajor == 1 && header.versionMinor >= 3)
+            {
+                fstrm.read((char*) &header.startOfWaveformDataPacketRecord, 8);
+            }
+
+            if (header.versionMajor == 1 && header.versionMinor == 4)
+            {
+                fstrm.read((char*) &header.startOfExtendVariableLength, 140);
+            }
+
+
+            // Done reading header.
+            std::cout << "System Identifier: " << header.systemIdentifier << ", Generating Software: "<< header.generatingSoftware <<std::endl;
+            std::cout << "LAS version: " << static_cast<int>(header.versionMajor) << "." << static_cast<int>(header.versionMinor) << std::endl;
+            // std::cout << "variableLengthRecords:  " << loader.header.numberOfVarableLengthRecords << std::endl;
+            if (usingCreationDay)
+                std::cout << "Creation day of year: " << header.fileCreationDayOfYear << std::endl;
+            if (usingCreationYear)
+                std::cout << "Creation year: " << header.fileCreationYear << std::endl;
+            std::cout << "Header size: " << header.headerSize << std::endl;
+
+
+            // Set stream to start of point data position
+            fstrm.seekg(header.byteOffsetToPointData, fstrm.beg); // byteOffset from beginning
+            currentPointSize = 0;
+            fileOpened = true;
+        }
+        else
+        {
+            std::cout << "Could not open file for reading: " << file << std::endl;
+            fileOpened = false;
+        }
+
+        return fileOpened;
     }
 
 
@@ -199,82 +298,10 @@ public:
         LASLoader loader{};
         std::vector <PointDataRecordData> points;
 
-        fstrm.open(file.c_str(), std::ifstream::in | std::ifstream::binary);
-        if (fstrm.is_open())
+        if (loader.open(file))
         {
-            std::cout << "LAS file read: " << file << std::endl;
-            // Read in first 90 bytes of header
-            fstrm.read((char *) &loader.header, 90);
-
-            // Attempt to read in creationday and creationyear
-            int readerCheckpoint = fstrm.tellg();
-            unsigned short creationDayYear[2]{1000, 3000};
-            fstrm.read((char*) creationDayYear, 2 * sizeof(unsigned short));
-            if (creationDayYear[0] < 367)
-            {
-                if (creationDayYear[0] != 0)
-                {
-                    loader.header.fileCreationDayOfYear = creationDayYear[0];
-                    loader.usingCreationDay = true;
-                }
-                else
-                {
-                    loader.usingCreationDay = false;
-                }
-
-                if (creationDayYear[1] > 2000 && creationDayYear[1] <= getCurrentYear())
-                {
-                    loader.header.fileCreationYear = creationDayYear[1];
-                    loader.usingCreationYear = true;
-                }
-                else
-                {
-                    loader.usingCreationYear = false;
-                }
-            }
-            else
-            {
-                fstrm.seekg(readerCheckpoint, fstrm.beg);
-                loader.usingCreationDay = false;
-                loader.usingCreationYear = false;
-            }
-
-            // Read 37 more byte
-            fstrm.read((char*) &loader.header.headerSize, 37);
-
-            // And now 96 more bytes
-            fstrm.read((char*) &loader.header.xScaleFactor, 96);
-
-            // For newer types:
-            if (loader.header.versionMajor == 1 && loader.header.versionMinor >= 3)
-            {
-                fstrm.read((char*) &loader.header.startOfWaveformDataPacketRecord, 8);
-            }
-
-            if (loader.header.versionMajor == 1 && loader.header.versionMinor == 4)
-            {
-                fstrm.read((char*) &loader.header.startOfExtendVariableLength, 140);
-            }
-
-
-            // Done reading header.
-            std::cout << "System Identifier: " << loader.header.systemIdentifier << ", Generating Software: "<< loader.header.generatingSoftware <<std::endl;
-            std::cout << "LAS version: " << static_cast<int>(loader.header.versionMajor) << "." << static_cast<int>(loader.header.versionMinor) << std::endl;
-            // std::cout << "variableLengthRecords:  " << loader.header.numberOfVarableLengthRecords << std::endl;
-            if (loader.usingCreationDay)
-                std::cout << "Creation day of year: " << loader.header.fileCreationDayOfYear << std::endl;
-            if (loader.usingCreationYear)
-                std::cout << "Creation year: " << loader.header.fileCreationYear << std::endl;
-            std::cout << "Header size: " << loader.header.headerSize << std::endl;
-
-
-            // Set stream to start of point data position
-            fstrm.seekg(loader.header.byteOffsetToPointData, fstrm.beg); // byteOffset from beginning
-            unsigned int currentPointSize{0};
-
-
             // Read points
-            for (unsigned int pointIndex{0}; currentPointSize < loader.header.pointDataRecordLength; ++pointIndex)
+            for (unsigned int pointIndex{0}; loader.currentPointSize < loader.header.pointDataRecordLength; ++pointIndex)
             {
                 if (loader.header.pointDataRecordFormat > 3)
                 {
@@ -305,7 +332,7 @@ public:
         }
         else
         {
-            std::cout << "Could not open file for reading: " << file << std::endl;
+
         }
 
         return points;
