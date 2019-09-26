@@ -8,6 +8,9 @@ struct vec3
 };
 }
 
+#ifndef LASLOADER_H
+#define LASLOADER_H
+
 #include <vector>
 #include <fstream>
 #include <iostream>
@@ -291,3 +294,5 @@ public:
     }
 
 };
+
+#endif // LASLOADER_H
