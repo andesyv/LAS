@@ -27,7 +27,7 @@ unsigned short getCurrentYear()
 // 64 bit must use other types that are equal in bytesize.
 class LASLoader
 {
-private:
+public:
     /** Standard type sizes for 32 bit compiler:
      * char = 1
      * short = 2
@@ -120,7 +120,7 @@ private:
         unsigned short& Blue() { return (mFormat == 2) ? *((unsigned short*)(&_GPSTime + 2 * sizeof(short))) : _Blue; }
 
         // Other functions
-        unsigned short getFormat() const { return static_cast<unsigned short>(mFormat); }
+        unsigned char getFormat() const { return mFormat; }
         unsigned short getFormatSize() const
         {
             switch (mFormat)
@@ -181,6 +181,90 @@ private:
         WKT = 16
     };
 
+    // Iterator class for point
+    class PointIterator
+    {
+    private:
+        unsigned int pointIndex{0};
+        LASLoader& loaderRef;
+        PointDataRecordData data;
+        unsigned short pointAmount;
+
+    public:
+        PointIterator(LASLoader& loader, unsigned char format, unsigned int startIndex)
+            : loaderRef{loader}, data{format}, pointIndex{startIndex}
+        {
+            pointAmount = loaderRef.header.pointDataRecordLength/data.getFormatSize();
+
+            if (pointIndex > pointAmount)
+                pointIndex = pointAmount;
+
+            if (pointIndex < pointAmount)
+            {
+                // Set stream to point data position offset
+                loaderRef.fstrm.seekg(loaderRef.header.byteOffsetToPointData + pointIndex * data.getFormatSize(), loaderRef.fstrm.beg); // byteOffset from beginning
+
+                loaderRef.fstrm.read((char*) &data, data.getFormatSize());
+                data.x = data.getX(&loaderRef);
+                data.y = data.getY(&loaderRef);
+                data.z = data.getZ(&loaderRef);
+            }
+        }
+
+        PointDataRecordData& operator* ()
+        {
+            return data;
+        }
+
+        PointDataRecordData* operator-> ()
+        {
+            return &data;
+        }
+
+        PointIterator& operator++ ()
+        {
+            if (loaderRef.fstrm.tellg() != loaderRef.header.byteOffsetToPointData + (pointIndex + 1) * data.getFormatSize())
+            {
+                loaderRef.fstrm.seekg(loaderRef.header.byteOffsetToPointData + (pointIndex + 1) * data.getFormatSize(), loaderRef.fstrm.beg); // byteOffset from beginning
+            }
+
+            loaderRef.fstrm.read((char*) &data, data.getFormatSize());
+            ++pointIndex;
+
+            data.x = data.getX(&loaderRef);
+            data.y = data.getY(&loaderRef);
+            data.z = data.getZ(&loaderRef);
+
+            return *this;
+        }
+
+        bool operator!=(const PointIterator& other)
+        {
+            return pointIndex != other.pointIndex || data.getFormat() != other.data.getFormat();
+        }
+
+        PointIterator operator+ (unsigned int offset) const
+        {
+            return PointIterator{loaderRef, data.getFormat(), pointIndex + offset};
+        }
+
+        PointIterator operator- (unsigned int offset) const
+        {
+            return PointIterator{loaderRef, data.getFormat(), (pointIndex < offset) ? 0 : pointIndex - offset};
+        }
+    };
+
+    PointIterator begin()
+    {
+        return PointIterator{*this, header.pointDataRecordFormat, 0};
+    }
+    PointIterator end()
+    {
+        PointDataRecordData p{header.pointDataRecordFormat};
+        return PointIterator{*this, p.getFormat(), static_cast<unsigned int>(header.pointDataRecordLength/p.getFormatSize())};
+    }
+
+// Extra loader data
 private:
     bool usingCreationDay = false;
     bool usingCreationYear = false;
@@ -264,6 +348,14 @@ public:
                 fstrm.read((char*) &header.startOfExtendVariableLength, 140);
             }
 
+            if (header.pointDataRecordFormat > 3)
+            {
+                std::cout << "ERROR: PointDataFormat not supported (yet)!" << std::endl;
+                fstrm.close();
+                fileOpened = false;
+                return false;
+            }
+
 
             // Done reading header.
             std::cout << "System Identifier: " << header.systemIdentifier << ", Generating Software: "<< header.generatingSoftware <<std::endl;
@@ -276,8 +368,6 @@ public:
             std::cout << "Header size: " << header.headerSize << std::endl;
 
 
-            // Set stream to start of point data position
-            fstrm.seekg(header.byteOffsetToPointData, fstrm.beg); // byteOffset from beginning
             currentPointSize = 0;
             fileOpened = true;
         }
@@ -290,52 +380,32 @@ public:
         return fileOpened;
     }
 
+    void close()
+    {
+        fstrm.close();
+        fileOpened = false;
+    }
 
     // File with full path
     static std::vector<PointDataRecordData> readLAS(const std::string& file)
     {
-        std::ifstream fstrm;
         LASLoader loader{};
         std::vector <PointDataRecordData> points;
 
         if (loader.open(file))
         {
-            // Read points
-            for (unsigned int pointIndex{0}; loader.currentPointSize < loader.header.pointDataRecordLength; ++pointIndex)
+            for (auto it = loader.begin(); it != loader.end(); ++it)
             {
-                if (loader.header.pointDataRecordFormat > 3)
-                {
-                    std::cout << "ERROR PointDataFormat not supported!" << std::endl;
-                    return {};
-                }
-                PointDataRecordData point{loader.header.pointDataRecordFormat};
-                fstrm.read((char*) &point, point.getFormatSize());
-
-                // Do some configuration on first point
-                if (pointIndex == 0)
-                {
-                    auto pointAmount = loader.header.pointDataRecordLength/point.getFormatSize();
-                    std::cout << "Pointdata format size: " << point.getFormatSize() << ", pointdata amount: " << loader.header.pointDataRecordLength/point.getFormatSize() << std::endl;
-                    points.reserve(pointAmount);
-                }
-                // std::cout << "Unformatted x: " << point.unformattedX << ", y: " << point.unformattedY << ", z: " << point.unformattedZ << std::endl;
-
-                point.x = point.getX(&loader);
-                point.y = point.getY(&loader);
-                point.z = point.getZ(&loader);
-
-                points.push_back(point);
-                // std::cout << "Formatted point: x: " << coord.x << ", y: " << coord.y << ", z: " << coord.z << std::endl;
+                points.push_back(*it);
             }
-
-            fstrm.close();
-        }
-        else
-        {
-
         }
 
         return points;
+    }
+
+    ~LASLoader()
+    {
+        close();
     }
 
 };
