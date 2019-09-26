@@ -1,6 +1,12 @@
 #ifndef LASLOADER_H
 #define LASLOADER_H
 
+/** LAS file loader
+ * Reads an uncompressed LAS file and
+ * extracts the points.
+ * @authors andesyv, KriAB, Gammelsaeterg, Lillebenn
+ */
+
 #include <vector>
 #include <fstream>
 #include <iostream>
@@ -9,17 +15,17 @@
 namespace gsl
 {
 
+
+
+constexpr bool VERBOSE = false;
+
+
+
 unsigned short getCurrentYear()
 {
     auto t = std::time(nullptr);
     return std::localtime(&t)->tm_year + 1900;
 }
-
-/** LAS file loader
- * Reads an uncompressed LAS file and
- * extracts the points.
- * @authors andesyv, KriAB, Gammelsaeterg, Lillebenn
- */
 
 // TODO update so both 1.2 and 1.4 will work
 // - Add 1.3 and 1.4 formats
@@ -355,17 +361,20 @@ public:
                 fileOpened = false;
                 return false;
             }
-
-
             // Done reading header.
-            std::cout << "System Identifier: " << header.systemIdentifier << ", Generating Software: "<< header.generatingSoftware <<std::endl;
-            std::cout << "LAS version: " << static_cast<int>(header.versionMajor) << "." << static_cast<int>(header.versionMinor) << std::endl;
-            // std::cout << "variableLengthRecords:  " << loader.header.numberOfVarableLengthRecords << std::endl;
-            if (usingCreationDay)
-                std::cout << "Creation day of year: " << header.fileCreationDayOfYear << std::endl;
-            if (usingCreationYear)
-                std::cout << "Creation year: " << header.fileCreationYear << std::endl;
-            std::cout << "Header size: " << header.headerSize << std::endl;
+
+
+            if (VERBOSE)
+            {
+                std::cout << "System Identifier: " << header.systemIdentifier << ", Generating Software: "<< header.generatingSoftware <<std::endl;
+                std::cout << "LAS version: " << static_cast<int>(header.versionMajor) << "." << static_cast<int>(header.versionMinor) << std::endl;
+                // std::cout << "variableLengthRecords:  " << loader.header.numberOfVarableLengthRecords << std::endl;
+                if (usingCreationDay)
+                    std::cout << "Creation day of year: " << header.fileCreationDayOfYear << std::endl;
+                if (usingCreationYear)
+                    std::cout << "Creation year: " << header.fileCreationYear << std::endl;
+                std::cout << "Header size: " << header.headerSize << std::endl;
+            }
 
 
             currentPointSize = 0;
