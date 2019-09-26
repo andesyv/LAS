@@ -1,13 +1,3 @@
-namespace gsl
-{
-struct vec3
-{
-    float x;
-    float y;
-    float z;
-};
-}
-
 #ifndef LASLOADER_H
 #define LASLOADER_H
 
@@ -31,7 +21,8 @@ unsigned short getCurrentYear()
  * @authors andesyv, KriAB, Gammelsaeterg, Lillebenn
  */
 
-//TODO update so both 1.2 and 1.4 will work
+// TODO update so both 1.2 and 1.4 will work
+// - Add 1.3 and 1.4 formats
 // NB: For 32 bit compilator
 // 64 bit must use other types that are equal in bytesize.
 class LASLoader
@@ -78,12 +69,12 @@ private:
         double xbyteOffset;
         double ybyteOffset;
         double zbyteOffset;
-        double maxX;
-        double minX;
+        double maxunformattedX;
+        double minunformattedX;
         double maxY;
         double minY;
-        double maxZ;
-        double minZ;
+        double maxunformattedZ;
+        double minunformattedZ;
         // 96 more bytes
         // For 1.3 format
         unsigned long long startOfWaveformDataPacketRecord;
@@ -110,9 +101,9 @@ private:
     public:
         PointDataRecordData(unsigned char format) : mFormat{format} {}
 
-        long X;
-        long Y;
-        long Z;
+        long unformattedX;
+        long unformattedY;
+        long unformattedZ;
         unsigned short intensity; //Not required
         unsigned char ReturnNumber : 3;
         unsigned char NumberOfReturns : 3;
@@ -147,6 +138,25 @@ private:
             }
         }
 
+        double getX(LASLoader* loader)
+        {
+            if (loader == nullptr)
+                return 0.0;
+            return unformattedX * loader->header.xScaleFactor + loader->header.xbyteOffset;
+        }
+        double getY(LASLoader* loader)
+        {
+            if (loader == nullptr)
+                return 0.0;
+            return unformattedY * loader->header.yScaleFactor + loader->header.ybyteOffset;
+        }
+        double getZ(LASLoader* loader)
+        {
+            if (loader == nullptr)
+                return 0.0;
+            return unformattedZ * loader->header.zScaleFactor + loader->header.zbyteOffset;
+        }
+
     private:
         // Depending on format
         double _GPSTime;
@@ -155,6 +165,11 @@ private:
         unsigned short _Blue;
 
         unsigned char mFormat;
+
+    public:
+        double x{};
+        double y{};
+        double z{};
     };
 
     enum GLOBALENCODINGFLAG
@@ -178,11 +193,11 @@ public:
 
 
     // File with full path
-    static std::vector<gsl::vec3> readLAS(const std::string& file)
+    static std::vector<PointDataRecordData> readLAS(const std::string& file)
     {
         std::ifstream fstrm;
         LASLoader loader{};
-        std::vector <gsl::vec3> vertices;
+        std::vector <PointDataRecordData> points;
 
         fstrm.open(file.c_str(), std::ifstream::in | std::ifstream::binary);
         if (fstrm.is_open())
@@ -274,15 +289,15 @@ public:
                 {
                     auto pointAmount = loader.header.pointDataRecordLength/point.getFormatSize();
                     std::cout << "Pointdata format size: " << point.getFormatSize() << ", pointdata amount: " << loader.header.pointDataRecordLength/point.getFormatSize() << std::endl;
-                    vertices.reserve(pointAmount);
+                    points.reserve(pointAmount);
                 }
-                // std::cout << "Unformatted x: " << point.X << ", y: " << point.Y << ", z: " << point.Z << std::endl;
+                // std::cout << "Unformatted x: " << point.unformattedX << ", y: " << point.unformattedY << ", z: " << point.unformattedZ << std::endl;
 
-                gsl::vec3 coord;
-                coord.x = (point.X * loader.header.xScaleFactor) + loader.header.xbyteOffset;
-                coord.y = (point.Y * loader.header.yScaleFactor) + loader.header.ybyteOffset;
-                coord.z = (point.Z * loader.header.zScaleFactor) + loader.header.zbyteOffset;
-                vertices.push_back(coord);
+                point.x = point.getX(&loader);
+                point.y = point.getY(&loader);
+                point.z = point.getZ(&loader);
+
+                points.push_back(point);
                 // std::cout << "Formatted point: x: " << coord.x << ", y: " << coord.y << ", z: " << coord.z << std::endl;
             }
 
@@ -293,7 +308,7 @@ public:
             std::cout << "Could not open file for reading: " << file << std::endl;
         }
 
-        return vertices;
+        return points;
     }
 
 };
