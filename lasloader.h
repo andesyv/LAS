@@ -70,12 +70,12 @@ public:
         double xbyteOffset;
         double ybyteOffset;
         double zbyteOffset;
-        double maxunformattedX;
-        double minunformattedX;
-        double maxY;
-        double minY;
-        double maxunformattedZ;
-        double minunformattedZ;
+        double maxUnformattedX;
+        double minUnformattedX;
+        double maxUnformattedY;
+        double minUnformattedY;
+        double maxUnformattedZ;
+        double minUnformattedZ;
         // 96 more bytes
         // For 1.3 format
         unsigned long long startOfWaveformDataPacketRecord;
@@ -158,6 +158,33 @@ public:
             return unformattedZ * loader->header.zScaleFactor + loader->header.zbyteOffset;
         }
 
+        double getXNormalized(LASLoader* loader)
+        {
+            if (loader == nullptr)
+                return 0.0;
+
+            double normalizedX = unformattedX * loader->header.xScaleFactor + loader->header.xbyteOffset;
+                   normalizedX = (normalizedX - loader->header.minUnformattedX)/(loader->header.maxUnformattedX - loader->header.minUnformattedX);
+            return normalizedX;
+        }
+        double getYNormalized(LASLoader* loader)
+        {
+            if (loader == nullptr)
+                return 0.0;
+             double normalizedY = unformattedY * loader->header.yScaleFactor + loader->header.ybyteOffset;
+              normalizedY = (normalizedY - loader->header.minUnformattedY)/(loader->header.maxUnformattedY - loader->header.minUnformattedY);
+            return normalizedY;
+        }
+        //Normalized: point - min / max - min
+        double getZNormalized(LASLoader* loader)
+        {
+            if (loader == nullptr)
+                return 0.0;
+           double normalizedZ = unformattedZ * loader->header.zScaleFactor + loader->header.zbyteOffset;
+           normalizedZ = (normalizedZ - loader->header.minUnformattedZ)/(loader->header.maxUnformattedZ - loader->header.minUnformattedZ);
+           return normalizedZ;
+        }
+
     private:
         // Depending on format
         double _GPSTime;
@@ -189,11 +216,12 @@ public:
         unsigned int pointIndex{0};
         LASLoader& loaderRef;
         PointDataRecordData data;
+        PointDataRecordData dataNormalized;
         unsigned short pointAmount;
 
     public:
         PointIterator(LASLoader& loader, unsigned char format, unsigned int startIndex)
-            : loaderRef{loader}, data{format}, pointIndex{startIndex}
+            :pointIndex{startIndex}, loaderRef{loader}, data{format},dataNormalized{data}
         {
             pointAmount = loaderRef.header.pointDataRecordLength/data.getFormatSize();
 
@@ -209,6 +237,11 @@ public:
                 data.x = data.getX(&loaderRef);
                 data.y = data.getY(&loaderRef);
                 data.z = data.getZ(&loaderRef);
+
+                dataNormalized.x = data.getXNormalized(&loaderRef);
+                dataNormalized.y = data.getYNormalized(&loaderRef);
+                dataNormalized.z = data.getZNormalized(&loaderRef);
+
             }
         }
 
@@ -387,12 +420,12 @@ public:
         fstrm.close();
         fileOpened = false;
     }
-    double length(double &x, double &y, double &z) const
+   static double length(double &x, double &y, double &z)
     {
         return std::sqrt(std::pow(x, 2.f) + std::pow(y, 2.f) + std::pow(z, 2.f));
     }
     //The points are to big for use in OpenGL, need to normalize
-    std::array<double,3> normalizePoints (double &x, double &y, double &z)
+ static   std::array<double,3> normalizePoints (double &x, double &y, double &z)
     {
             double l = length(x,y,z);
 
@@ -406,6 +439,7 @@ public:
             return std::array<double,3>{x,y,z};
     }
     // File with full path
+    // Stack overflow!
     static std::vector<PointDataRecordData> readLAS(const std::string& file)
     {
         LASLoader loader{};
@@ -422,7 +456,7 @@ public:
         return points;
     }
 
-     std::vector<PointDataRecordData> readLASNormalized(const std::string& file)
+ static std::vector<PointDataRecordData> readLASNormalized(const std::string& file)
     {
         LASLoader loader{};
         std::vector <PointDataRecordData> points;
