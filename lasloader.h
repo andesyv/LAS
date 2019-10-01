@@ -11,16 +11,10 @@
 #include <fstream>
 #include <iostream>
 #include <ctime>
-
+#include <cmath>
 namespace gsl
 {
-
-
-
 constexpr bool VERBOSE = false;
-
-
-
 unsigned short getCurrentYear()
 {
     auto t = std::time(nullptr);
@@ -394,7 +388,24 @@ public:
         fstrm.close();
         fileOpened = false;
     }
+    float length(float x, float y, float z) const
+    {
+        return std::sqrt(std::pow(x, 2.f) + std::pow(y, 2.f) + std::pow(z, 2.f));
+    }
+    //The points are to big for use in OpenGL, need to normalize
+    void normalizePoints(float x, float y, float z)
+    {
 
+            float l = length(x,y,z);
+
+            if (l > 0.f)
+            {
+                x = x / l;
+                y = y / l;
+                z = z / l;
+            }
+
+    }
     // File with full path
     static std::vector<PointDataRecordData> readLAS(const std::string& file)
     {
