@@ -12,6 +12,7 @@
 #include <iostream>
 #include <ctime>
 #include <cmath>
+#include <array>
 namespace gsl
 {
 constexpr bool VERBOSE = false;
@@ -357,7 +358,6 @@ public:
             }
             // Done reading header.
 
-
             if (VERBOSE)
             {
                 std::cout << "System Identifier: " << header.systemIdentifier << ", Generating Software: "<< header.generatingSoftware <<std::endl;
@@ -369,7 +369,6 @@ public:
                     std::cout << "Creation year: " << header.fileCreationYear << std::endl;
                 std::cout << "Header size: " << header.headerSize << std::endl;
             }
-
 
             currentPointSize = 0;
             fileOpened = true;
@@ -388,23 +387,23 @@ public:
         fstrm.close();
         fileOpened = false;
     }
-    float length(float x, float y, float z) const
+    double length(double &x, double &y, double &z) const
     {
         return std::sqrt(std::pow(x, 2.f) + std::pow(y, 2.f) + std::pow(z, 2.f));
     }
     //The points are to big for use in OpenGL, need to normalize
-    void normalizePoints(float x, float y, float z)
+    std::array<double,3> normalizePoints (double &x, double &y, double &z)
     {
+            double l = length(x,y,z);
 
-            float l = length(x,y,z);
-
-            if (l > 0.f)
+            if (l > 0)
             {
                 x = x / l;
                 y = y / l;
                 z = z / l;
             }
 
+            return std::array<double,3>{x,y,z};
     }
     // File with full path
     static std::vector<PointDataRecordData> readLAS(const std::string& file)
@@ -416,6 +415,23 @@ public:
         {
             for (auto it = loader.begin(); it != loader.end(); ++it)
             {
+                points.push_back(*it);
+            }
+        }
+
+        return points;
+    }
+
+     std::vector<PointDataRecordData> readLASNormalized(const std::string& file)
+    {
+        LASLoader loader{};
+        std::vector <PointDataRecordData> points;
+
+        if (loader.open(file))
+        {
+            for (auto it = loader.begin(); it != loader.end(); ++it)
+            {
+                normalizePoints(it->x,it->y,it->z);
                 points.push_back(*it);
             }
         }
