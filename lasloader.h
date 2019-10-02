@@ -13,6 +13,10 @@
 #include <ctime>
 #include <cmath>
 #include <array>
+#include <sstream>
+#include <algorithm>
+#include <iterator>
+
 namespace gsl
 {
 constexpr bool VERBOSE = false;
@@ -124,7 +128,12 @@ public:
         unsigned char getFormat() const { return mFormat; }
         unsigned short getFormatSize() const
         {
-            switch (mFormat)
+            return formatSize(mFormat);
+        }
+
+        static unsigned short formatSize(unsigned char format)
+        {
+            switch (format)
             {
                 case 0:
                 return 20;
@@ -223,13 +232,13 @@ public:
         unsigned int pointIndex{0};
         LASLoader& loaderRef;
         PointDataRecordData data;
-        unsigned short pointAmount;
+        unsigned int pointAmount;
 
     public:
         PointIterator(LASLoader& loader, unsigned char format, unsigned int startIndex)
             : pointIndex{startIndex}, loaderRef{loader}, data{format}
         {
-            pointAmount = loaderRef.header.pointDataRecordLength/data.getFormatSize();
+            pointAmount = loaderRef.pointCount();
 
             if (pointIndex > pointAmount)
                 pointIndex = pointAmount;
@@ -289,7 +298,7 @@ public:
 
         PointIterator operator+ (unsigned int offset) const
         {
-            return PointIterator{loaderRef, data.getFormat(), pointIndex + offset};
+            return PointIterator{loaderRef, data.getFormat(), (pointIndex + offset < pointAmount) ? pointIndex + offset : pointAmount};
         }
 
         PointIterator operator- (unsigned int offset) const
@@ -300,12 +309,13 @@ public:
 
     PointIterator begin()
     {
+        if (!fileOpened)
+            return end();
         return PointIterator{*this, header.pointDataRecordFormat, 0};
     }
     PointIterator end()
     {
-        PointDataRecordData p{header.pointDataRecordFormat};
-        return PointIterator{*this, p.getFormat(), static_cast<unsigned int>(header.pointDataRecordLength/p.getFormatSize())};
+        return PointIterator{*this, (fileOpened) ? header.pointDataRecordFormat : std::numeric_limits<unsigned char>::max(), pointCount()};
     }
 
 // Extra loader data
@@ -335,6 +345,28 @@ public:
             fstrm.close();
         }
 
+        // Check if filename has a filetype
+        auto pos = file.find_last_of('.');
+        if (pos == file.npos)
+        {
+            std::cout << "ERROR: filepath must specify a filetype. (path/file.type)" << std::endl;
+            fileOpened = false;
+            return false;
+
+        }
+
+        // Check filetype
+        auto fileType = file.substr(pos + 1);
+        std::string uppercase{};
+        std::transform(fileType.begin(), fileType.end(), std::back_inserter(uppercase), [](const char& c){ return std::toupper(c); });
+        if (uppercase != "LAS")
+        {
+            std::cout << "ERROR: loader can only read Lidar LAS files." << std::endl;
+            fileOpened = false;
+            return false;
+        }
+
+        // Open file
         fstrm.open(file.c_str(), std::ifstream::in | std::ifstream::binary);
         if (fstrm.is_open())
         {
@@ -419,7 +451,7 @@ public:
         }
         else
         {
-            std::cout << "Could not open file for reading: " << file << std::endl;
+            std::cout << "ERROR: Could not open file for reading: " << file << std::endl;
             fileOpened = false;
         }
 
@@ -431,12 +463,21 @@ public:
         fstrm.close();
         fileOpened = false;
     }
-   static double length(double &x, double &y, double &z)
+
+    unsigned int pointCount() const
+    {
+        if (!fileOpened)
+            return 0;
+
+        return header.pointDataRecordLength / PointDataRecordData::formatSize(header.pointDataRecordFormat);
+    }
+
+    static double length(double &x, double &y, double &z)
     {
         return std::sqrt(std::pow(x, 2.f) + std::pow(y, 2.f) + std::pow(z, 2.f));
     }
     //The points are to big for use in OpenGL, need to normalize
- static   std::array<double,3> normalizePoints (double &x, double &y, double &z)
+    static std::array<double,3> normalizePoints (double &x, double &y, double &z)
     {
             double l = length(x,y,z);
 
@@ -467,7 +508,7 @@ public:
         return points;
     }
 
- static std::vector<PointDataRecordData> readLASNormalized(const std::string& file)
+    static std::vector<PointDataRecordData> readLASNormalized(const std::string& file)
     {
         LASLoader loader{};
         std::vector <PointDataRecordData> points;
