@@ -392,13 +392,6 @@ public:
                 fstrm.read((char*) &header.startOfExtendVariableLength, 140);
             }
 
-            if (header.pointDataRecordFormat > 3)
-            {
-                std::cout << "ERROR: PointDataFormat not supported (yet)!" << std::endl;
-                fstrm.close();
-                fileOpened = false;
-                return false;
-            }
             // Done reading header.
 
             if (VERBOSE)
@@ -411,6 +404,14 @@ public:
                 if (usingCreationYear)
                     std::cout << "Creation year: " << header.fileCreationYear << std::endl;
                 std::cout << "Header size: " << header.headerSize << std::endl;
+            }
+
+            if (header.pointDataRecordFormat > 3)
+            {
+                std::cout << "ERROR: PointDataFormat not supported (yet)!" << std::endl;
+                fstrm.close();
+                fileOpened = false;
+                return false;
             }
 
             currentPointSize = 0;
