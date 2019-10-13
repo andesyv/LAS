@@ -465,6 +465,16 @@ public:
         return mPointCount;
     }
 
+    bool opened() const
+    {
+        return fileOpened;
+    }
+
+    operator bool() const
+    {
+        return fileOpened;
+    }
+
     void close()
     {
         fstrm.close();
