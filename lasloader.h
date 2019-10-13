@@ -238,7 +238,7 @@ public:
         PointIterator(LASLoader& loader, unsigned char format, unsigned int startIndex)
             : pointIndex{startIndex}, loaderRef{loader}, data{format}
         {
-            pointAmount = loaderRef.pointCount();
+            pointAmount = loaderRef.mPointCount;
 
             if (pointIndex > pointAmount)
                 pointIndex = pointAmount;
@@ -313,9 +313,10 @@ public:
             return end();
         return PointIterator{*this, header.pointDataRecordFormat, 0};
     }
+
     PointIterator end()
     {
-        return PointIterator{*this, (fileOpened) ? header.pointDataRecordFormat : std::numeric_limits<unsigned char>::max(), pointCount()};
+        return PointIterator{*this, (fileOpened) ? header.pointDataRecordFormat : std::numeric_limits<unsigned char>::max(), mPointCount + 1};
     }
 
 // Extra loader data
@@ -323,7 +324,7 @@ private:
     bool usingCreationDay = false;
     bool usingCreationYear = false;
     bool fileOpened = false;
-    unsigned int currentPointSize{0};
+    unsigned int mPointCount{0};
 
     std::ifstream fstrm{};
 
@@ -446,8 +447,9 @@ public:
                 return false;
             }
 
-            currentPointSize = 0;
             fileOpened = true;
+
+            countPoints();
         }
         else
         {
@@ -458,18 +460,15 @@ public:
         return fileOpened;
     }
 
+    unsigned int pointCount() const
+    {
+        return mPointCount;
+    }
+
     void close()
     {
         fstrm.close();
         fileOpened = false;
-    }
-
-    unsigned int pointCount() const
-    {
-        if (!fileOpened)
-            return 0;
-
-        return header.pointDataRecordLength / PointDataRecordData::formatSize(header.pointDataRecordFormat);
     }
 
     static double length(double &x, double &y, double &z)
@@ -528,6 +527,22 @@ public:
     ~LASLoader()
     {
         close();
+    }
+
+private:
+    void countPoints()
+    {
+        if (!fileOpened)
+            return;
+
+        fstrm.seekg(header.byteOffsetToPointData, fstrm.beg); // byteOffset from beginning
+        long long start = fstrm.tellg();
+
+        fstrm.seekg(0, fstrm.end); // byteOffset from beginning
+        long long end = fstrm.tellg();
+
+        auto index = (end - start) / static_cast<long long>(PointDataRecordData::formatSize(header.pointDataRecordFormat));
+        mPointCount = static_cast<unsigned int>((index > 0) ? index : 0);
     }
 
 };
