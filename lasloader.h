@@ -230,15 +230,15 @@ public:
     {
     private:
         unsigned int pointIndex{0};
-        LASLoader& loaderRef;
+        LASLoader* loaderRef;
         PointDataRecordData data;
         unsigned int pointAmount;
 
     public:
-        PointIterator(LASLoader& loader, unsigned char format, unsigned int startIndex)
+        PointIterator(LASLoader* loader, unsigned char format, unsigned int startIndex)
             : pointIndex{startIndex}, loaderRef{loader}, data{format}
         {
-            pointAmount = loaderRef.mPointCount;
+            pointAmount = loaderRef->mPointCount;
 
             if (pointIndex > pointAmount)
                 pointIndex = pointAmount;
@@ -246,16 +246,16 @@ public:
             if (pointIndex < pointAmount)
             {
                 // Set stream to point data position offset
-                loaderRef.fstrm.seekg(loaderRef.header.byteOffsetToPointData + pointIndex * data.getFormatSize(), loaderRef.fstrm.beg); // byteOffset from beginning
+                loaderRef->fstrm.seekg(loaderRef->header.byteOffsetToPointData + pointIndex * data.getFormatSize(), loaderRef->fstrm.beg); // byteOffset from beginning
 
-                loaderRef.fstrm.read((char*) &data, data.getFormatSize());
-                data.x = data.getX(&loaderRef);
-                data.y = data.getY(&loaderRef);
-                data.z = data.getZ(&loaderRef);
+                loaderRef->fstrm.read((char*) &data, data.getFormatSize());
+                data.x = data.getX(loaderRef);
+                data.y = data.getY(loaderRef);
+                data.z = data.getZ(loaderRef);
 
-                data.setXNormalized(&loaderRef);
-                data.setYNormalized(&loaderRef);
-                data.setZNormalized(&loaderRef);
+                data.setXNormalized(loaderRef);
+                data.setYNormalized(loaderRef);
+                data.setZNormalized(loaderRef);
 
             }
         }
@@ -272,21 +272,21 @@ public:
 
         PointIterator& operator++ ()
         {
-            if (loaderRef.fstrm.tellg() != loaderRef.header.byteOffsetToPointData + (pointIndex + 1) * data.getFormatSize())
+            if (loaderRef->fstrm.tellg() != loaderRef->header.byteOffsetToPointData + (pointIndex + 1) * data.getFormatSize())
             {
-                loaderRef.fstrm.seekg(loaderRef.header.byteOffsetToPointData + (pointIndex + 1) * data.getFormatSize(), loaderRef.fstrm.beg); // byteOffset from beginning
+                loaderRef->fstrm.seekg(loaderRef->header.byteOffsetToPointData + (pointIndex + 1) * data.getFormatSize(), loaderRef->fstrm.beg); // byteOffset from beginning
             }
 
-            loaderRef.fstrm.read((char*) &data, data.getFormatSize());
+            loaderRef->fstrm.read((char*) &data, data.getFormatSize());
             ++pointIndex;
 
-            data.x = data.getX(&loaderRef);
-            data.y = data.getY(&loaderRef);
-            data.z = data.getZ(&loaderRef);
+            data.x = data.getX(loaderRef);
+            data.y = data.getY(loaderRef);
+            data.z = data.getZ(loaderRef);
 
-            data.setXNormalized(&loaderRef);
-            data.setYNormalized(&loaderRef);
-            data.setZNormalized(&loaderRef);
+            data.setXNormalized(loaderRef);
+            data.setYNormalized(loaderRef);
+            data.setZNormalized(loaderRef);
 
             return *this;
         }
@@ -305,18 +305,28 @@ public:
         {
             return PointIterator{loaderRef, data.getFormat(), (pointIndex < offset) ? 0 : pointIndex - offset};
         }
+
+        PointIterator& operator= (const PointIterator& other)
+        {
+            pointIndex = other.pointIndex;
+            loaderRef = other.loaderRef;
+            data = other.data;
+            pointAmount = other.pointAmount;
+
+            return *this;
+        }
     };
 
     PointIterator begin()
     {
         if (!fileOpened)
             return end();
-        return PointIterator{*this, header.pointDataRecordFormat, 0};
+        return PointIterator{this, header.pointDataRecordFormat, 0};
     }
 
     PointIterator end()
     {
-        return PointIterator{*this, (fileOpened) ? header.pointDataRecordFormat : std::numeric_limits<unsigned char>::max(), mPointCount + 1};
+        return PointIterator{this, (fileOpened) ? header.pointDataRecordFormat : std::numeric_limits<unsigned char>::max(), mPointCount + 1};
     }
 
 // Extra loader data
